@@ -29,27 +29,6 @@ function App() {
   };
 
   // Эффект для загрузки презентации при изменении текущего чата
-  useEffect(() => {
-    const loadChatPresentation = async () => {
-      if (!currentChatId) return;
-      
-      try {
-        const chatData = await getChatById(currentChatId);
-        const messages = chatData.messages;
-        
-        if (messages?.length > 0) {
-          const lastMessage = messages[messages.length - 1];
-          if (lastMessage.path) {
-            await loadDocumentFromUrl(lastMessage.path);
-          }
-        }
-      } catch (error) {
-        console.error('Ошибка при загрузке чата:', error);
-      }
-    };
-
-    loadChatPresentation();
-  }, [currentChatId]);
 
   useEffect(() => {
     if (viewer.current) viewer.current.innerHTML = '';
@@ -88,14 +67,23 @@ function App() {
     };
   }, []);
 
-  const handleFileFromChat = async (file) => {
-    if (file && instanceRef.current) {
-      setFileName(file.name);
-      const arrayBuffer = await file.arrayBuffer();
-      instanceRef.current.UI.loadDocument(arrayBuffer, { filename: file.name });
+  const handleFileFromChat = async (fileOrPath) => {
+    if (!instanceRef.current) return;
+  
+    try {
+      if (typeof fileOrPath === 'string') {
+        // Это path из сообщения
+        await loadDocumentFromUrl(fileOrPath);
+      } else {
+        // Это файл, загруженный пользователем
+        setFileName(fileOrPath.name);
+        const arrayBuffer = await fileOrPath.arrayBuffer();
+        instanceRef.current.UI.loadDocument(arrayBuffer, { filename: fileOrPath.name });
+      }
+    } catch (error) {
+      console.error('Ошибка при загрузке файла:', error);
     }
   };
-
   return (
     <>
       <div style={{ 

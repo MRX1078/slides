@@ -30,20 +30,18 @@ const ChatHistory = ({
     if (!newChatTitle.trim() || !presentation) return;
     
     try {
-      setIsCreating(true);
-      // Вызываем createChat с правильными аргументами
+      setIsCreating(false);
       const newChat = await createChat(newChatTitle, presentation);
       
       setChats(prev => [...prev, newChat]);
       setCurrentChatId(newChat.id);
       setNewChatTitle('');
       setPresentation(null);
-      setIsCreating(false);  // Явно закрываем форму после успеха
     } catch (error) {
       console.error('Failed to create chat:', error);
-      setIsCreating(false);  // Сброс даже при ошибке
-      // Показываем ошибку пользователю (например, через alert/toast)
-      alert('Не удалось создать чат: ' + error.message);
+      alert(`Не удалось создать чат: ${error.message}`);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -85,10 +83,8 @@ const ChatHistory = ({
 
   const loadChat = async (chatId) => {
     setCurrentChatId(chatId);
-    // Здесь должна быть логика загрузки презентации для выбранного чата
+
     if (instanceRef.current) {
-      // Загрузка документа для выбранного чата
-      // instanceRef.current.UI.loadDocument(...);
     }
   };
 
@@ -169,7 +165,7 @@ const ChatHistory = ({
 )}
           <button
             onClick={handleCreateChat}
-            disabled={!newChatTitle.trim() || isCreating}
+            disabled={!newChatTitle.trim() || !isCreating}
             style={{
               padding: '8px 12px',
               background: '#1677ff',
@@ -179,7 +175,7 @@ const ChatHistory = ({
               cursor: 'pointer'
             }}
           >
-            {isCreating ? 'Создание...' : 'Создать чат'}
+            {!isCreating ? 'Создание...' : 'Создать чат'}
           </button>
         </div>
       )}

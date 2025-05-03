@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Paperclip, Send, X } from 'react-feather';
+import { Paperclip, Send, X, CornerUpLeft } from 'react-feather';
 import { addMessageToChat, getChatById } from './api';
 
 const ChatBot = ({ onFileUpload, currentChatId }) => {
@@ -9,6 +9,8 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [currentReference, setCurrentReference] = useState(null);
+
 
   // Загрузка сообщений при смене чата или открытии чата
   useEffect(() => {
@@ -20,9 +22,9 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
           const formattedMessages = (chat.messages || []).map(msg => ({
             id: msg.id,
             text: msg.message,
-            isUser: true, // Предполагаем, что все сообщения от пользователя
+            isUser: true,
             timestamp: new Date(msg.created_at).toLocaleTimeString(),
-            path: msg.path // Дополнительные данные о файле, если есть
+            path: msg.path
           }));
           setMessages(formattedMessages);
         } catch (error) {
@@ -52,7 +54,6 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !currentChatId || isLoading) return;
   
-    // Объявляем tempMessage перед try-catch
     const tempMessage = {
       id: `temp-${Date.now()}`,
       text: inputValue,
@@ -65,8 +66,13 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
       setMessages(prev => [...prev, tempMessage]);
       setInputValue('');
   
-      await addMessageToChat(currentChatId, null, inputValue);
+      await addMessageToChat(
+        currentChatId, 
+        currentReference, // history_id
+        inputValue
+      );
       
+      // После отправки обновляем чат
       const chat = await getChatById(currentChatId);
       const formattedMessages = (chat.messages || []).map(msg => ({
         id: msg.id,
@@ -77,6 +83,15 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
       }));
   
       setMessages(formattedMessages);
+      setCurrentReference(null);
+      
+      // Автоматически показываем последнюю презентацию
+      if (formattedMessages.length > 0 && onFileUpload) {
+        const lastMsg = formattedMessages[formattedMessages.length - 1];
+        if (lastMsg.path) {
+          await onFileUpload(lastMsg.path);
+        }
+      }
     } catch (error) {
       console.error('Failed to send message:', error);
       setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
@@ -85,13 +100,38 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
     }
   };
   
+  // Новая функция для обработки клика по кнопке указателя
+  const handleReferenceClick = async (messageId) => {
+    if (!currentChatId || isLoading) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Находим сообщение в текущем состоянии (без запроса к API)
+      const referencedMessage = messages.find(msg => msg.id === messageId);
+      
+      if (referencedMessage?.path) {
+        // Подгружаем презентацию из сообщения
+        if (onFileUpload) {
+          await onFileUpload(referencedMessage.path);
+        }
+        
+        // Устанавливаем reference для следующего сообщения
+        setCurrentReference(messageId);
+      }
+    } catch (error) {
+      console.error('Failed to load reference:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleFileUpload = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !currentChatId) return;
   
     const file = files[0];
     
-    // Объявляем uploadMessage перед try-catch
     const uploadMessage = {
       id: `upload-${Date.now()}`,
       text: `Загружаем файл: ${file.name}`,
@@ -218,9 +258,35 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
                     backgroundColor: message.isUser ? '#1677ff' : '#f0f0f0',
                     color: message.isUser ? 'white' : 'black',
                     wordBreak: 'break-word',
-                    whiteSpace: 'pre-wrap'
+                    whiteSpace: 'pre-wrap',
+                    position: 'relative'
                   }}
                 >
+                  {/* Кнопка указатель */}
+                  {message.isUser && (
+                    <button
+                      onClick={() => handleReferenceClick(message.id)}
+                      style={{
+                        position: 'absolute',
+                        left: '-25px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: currentChatId ? 1 : 0.5
+                      }}
+                      title="Ссылаться на это сообщение"
+                    >
+                      <CornerUpLeft size={16} color="#666" />
+                    </button>
+                  )}
+                  
                   <div>{message.text}</div>
                   {message.file && (
                     <div style={{ 
