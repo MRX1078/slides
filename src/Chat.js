@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Paperclip, Send, X, CornerUpLeft } from 'react-feather';
+import { Send, X, CornerUpLeft, Clock, Loader } from 'react-feather';
 import { addMessageToChat, getChatById } from './api';
 
 const ChatBot = ({ onFileUpload, currentChatId }) => {
@@ -7,12 +7,12 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
   const [inputValue, setInputValue] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const [isWaitingForBot, setIsWaitingForBot] = useState(false);
   const [currentReference, setCurrentReference] = useState(null);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
-
-  // Загрузка сообщений при смене чата или открытии чата
   useEffect(() => {
     if (isOpen && currentChatId) {
       const loadMessages = async () => {
@@ -39,10 +39,19 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
     }
   }, [currentChatId, isOpen]);
 
-  // Автоскролл к новым сообщениям
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        150
+      )}px`;
+    }
+  }, [inputValue]);
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -63,16 +72,12 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
   
     try {
       setIsLoading(true);
+      setIsWaitingForBot(true);
       setMessages(prev => [...prev, tempMessage]);
       setInputValue('');
-  
-      await addMessageToChat(
-        currentChatId, 
-        currentReference, // history_id
-        inputValue
-      );
+
+      await addMessageToChat(currentChatId, currentReference, inputValue);
       
-      // После отправки обновляем чат
       const chat = await getChatById(currentChatId);
       const formattedMessages = (chat.messages || []).map(msg => ({
         id: msg.id,
@@ -81,11 +86,11 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
         timestamp: new Date(msg.created_at).toLocaleTimeString(),
         path: msg.path
       }));
-  
+
       setMessages(formattedMessages);
       setCurrentReference(null);
+      setSelectedMessage(null);
       
-      // Автоматически показываем последнюю презентацию
       if (formattedMessages.length > 0 && onFileUpload) {
         const lastMsg = formattedMessages[formattedMessages.length - 1];
         if (lastMsg.path) {
@@ -97,73 +102,29 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
       setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
     } finally {
       setIsLoading(false);
+      setIsWaitingForBot(false);
     }
   };
   
-  // Новая функция для обработки клика по кнопке указателя
   const handleReferenceClick = async (messageId) => {
     if (!currentChatId || isLoading) return;
     
     try {
       setIsLoading(true);
-      
-      // Находим сообщение в текущем состоянии (без запроса к API)
       const referencedMessage = messages.find(msg => msg.id === messageId);
       
       if (referencedMessage?.path) {
-        // Подгружаем презентацию из сообщения
         if (onFileUpload) {
           await onFileUpload(referencedMessage.path);
         }
-        
-        // Устанавливаем reference для следующего сообщения
         setCurrentReference(messageId);
+        setSelectedMessage(messageId);
       }
     } catch (error) {
       console.error('Failed to load reference:', error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleFileUpload = async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !currentChatId) return;
-  
-    const file = files[0];
-    
-    const uploadMessage = {
-      id: `upload-${Date.now()}`,
-      text: `Загружаем файл: ${file.name}`,
-      isUser: true,
-      timestamp: new Date().toLocaleTimeString(),
-      file
-    };
-  
-    try {
-      setIsLoading(true);
-      setMessages(prev => [...prev, uploadMessage]);
-  
-      if (onFileUpload) {
-        await onFileUpload(file);
-      }
-  
-      setMessages(prev => prev.map(msg => 
-        msg.id === uploadMessage.id 
-          ? { ...msg, text: `Загружен файл: ${file.name}` }
-          : msg
-      ));
-    } catch (error) {
-      console.error('File upload failed:', error);
-      setMessages(prev => prev.filter(msg => msg.id !== uploadMessage.id));
-    } finally {
-      setIsLoading(false);
-      e.target.value = '';
-    }
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
   };
 
   return (
@@ -177,6 +138,55 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
       flexDirection: 'column',
       alignItems: 'flex-end'
     }}>
+      {isWaitingForBot && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.2)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 2000,
+          pointerEvents: 'none'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            maxWidth: '300px'
+          }}>
+            <Loader size={32} color="#1677ff" className="spin" />
+            <div style={{ marginTop: '10px', textAlign: 'center' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+                Ожидайте ответа бота
+              </div>
+              <div style={{ fontSize: '0.9em', color: '#666' }}>
+                Идет обработка вашего запроса...
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          .spin {
+            animation: spin 1.5s linear infinite;
+          }
+        `}
+      </style>
+
       {isOpen && (
         <div style={{
           width: '100%',
@@ -186,9 +196,38 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          position: 'relative'
         }}>
-          {/* Заголовок чата */}
+          {isLoading && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: '#1677ff',
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: 'white',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '0.7em',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                marginTop: '2px'
+              }}>
+                <Clock size={12} style={{ marginRight: '5px' }} />
+                Обработка...
+              </div>
+            </div>
+          )}
+
           <div style={{
             padding: '12px 16px',
             backgroundColor: '#1677ff',
@@ -211,7 +250,6 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
             </button>
           </div>
 
-          {/* Область сообщений */}
           <div style={{
             flex: 1,
             padding: '16px',
@@ -259,10 +297,16 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
                     color: message.isUser ? 'white' : 'black',
                     wordBreak: 'break-word',
                     whiteSpace: 'pre-wrap',
-                    position: 'relative'
+                    position: 'relative',
+                    border: selectedMessage === message.id 
+                      ? '2px solid #52c41a' 
+                      : 'none',
+                    boxShadow: selectedMessage === message.id
+                      ? '0 0 0 2px rgba(82, 196, 26, 0.3)'
+                      : 'none',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  {/* Кнопка указатель */}
                   {message.isUser && (
                     <button
                       onClick={() => handleReferenceClick(message.id)}
@@ -283,27 +327,21 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
                       }}
                       title="Ссылаться на это сообщение"
                     >
-                      <CornerUpLeft size={16} color="#666" />
+                      <CornerUpLeft 
+                        size={16} 
+                        color={selectedMessage === message.id ? '#52c41a' : '#666'} 
+                      />
                     </button>
                   )}
                   
                   <div>{message.text}</div>
-                  {message.file && (
+                  {message.path && (
                     <div style={{ 
                       marginTop: '4px',
                       fontSize: '0.8em',
                       opacity: 0.8
                     }}>
-                      📄 {message.file.name}
-                    </div>
-                  )}
-                  {message.path && !message.file && (
-                    <div style={{ 
-                      marginTop: '4px',
-                      fontSize: '0.8em',
-                      opacity: 0.8
-                    }}>
-                      📄 Прикрепленный файл
+                      📄 Прикрепленная презентация
                     </div>
                   )}
                   <div style={{
@@ -320,95 +358,72 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Поле ввода */}
+          {/* ФИНАЛЬНАЯ ВЕРСИЯ ПОЛЯ ВВОДА */}
           <div style={{
             padding: '12px',
             borderTop: '1px solid #e0e0e0',
-            display: 'flex',
-            gap: '8px',
-            position: 'relative'
+            backgroundColor: 'white'
           }}>
-            {isLoading && (
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '3px',
-                background: '#1677ff',
-                animation: 'loading 1.5s infinite'
-              }} />
-            )}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".ppt,.pptx"
-              style={{ display: 'none' }}
-              disabled={!currentChatId || isLoading}
-            />
-            <button
-              onClick={triggerFileInput}
-              disabled={!currentChatId || isLoading}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '8px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: currentChatId ? 1 : 0.5
-              }}
-            >
-              <Paperclip size={20} color="#666" />
-            </button>
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={currentChatId ? "Введите сообщение..." : "Выберите чат..."}
-              disabled={!currentChatId || isLoading}
-              style={{
-                flex: 1,
-                padding: '10px 12px',
-                border: '1px solid #ddd',
-                borderRadius: '20px',
-                outline: 'none',
-                opacity: currentChatId ? 1 : 0.7
-              }}
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || !currentChatId || isLoading}
-              style={{
-                background: !inputValue.trim() || !currentChatId || isLoading ? '#ccc' : '#1677ff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: !inputValue.trim() || !currentChatId || isLoading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              <Send size={16} />
-            </button>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: '8px'
+            }}>
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder={currentChatId ? "Введите сообщение..." : "Выберите чат..."}
+                disabled={!currentChatId || isLoading}
+                style={{
+                  flex: 1,
+                  minHeight: '40px',
+                  maxHeight: '150px',
+                  padding: '10px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '20px',
+                  outline: 'none',
+                  resize: 'none',
+                  fontFamily: 'inherit',
+                  fontSize: 'inherit',
+                  overflowY: 'auto',
+                  boxSizing: 'border-box'
+                }}
+                rows={1}
+              />
+              
+              <button
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || !currentChatId || isLoading}
+                style={{
+                  flexShrink: 0,
+                  background: !inputValue.trim() || !currentChatId || isLoading ? '#ccc' : '#1677ff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: !inputValue.trim() || !currentChatId || isLoading ? 'not-allowed' : 'pointer',
+                  marginBottom: '2px'
+                }}
+              >
+                <Send size={16} />
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Кнопка открытия чата */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
           style={{
-            width: '45px',
-            height: '45px',
+            width: '60px',
+            height: '60px',
             borderRadius: '50%',
             background: '#1677ff',
             color: 'white',
@@ -419,7 +434,11 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '24px',
-            position: 'relative'
+            position: 'relative',
+            transition: 'transform 0.2s ease',
+            ':hover': {
+              transform: 'scale(1.05)'
+            }
           }}
         >
           💬
