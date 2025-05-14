@@ -27,6 +27,14 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
             path: msg.path
           }));
           setMessages(formattedMessages);
+  
+         
+          if (formattedMessages.length > 0 && onFileUpload) {
+            const firstMessage = formattedMessages[formattedMessages.length - 1];
+            if (firstMessage.path) {
+              await onFileUpload(firstMessage.path);
+            }
+          }
         } catch (error) {
           console.error('Failed to load messages:', error);
         } finally {
@@ -299,10 +307,10 @@ const ChatBot = ({ onFileUpload, currentChatId }) => {
                     whiteSpace: 'pre-wrap',
                     position: 'relative',
                     border: selectedMessage === message.id 
-                      ? '2px solid #52c41a' 
+                      ? '3px solid rgb(196, 26, 77)' 
                       : 'none',
                     boxShadow: selectedMessage === message.id
-                      ? '0 0 0 2px rgba(82, 196, 26, 0.3)'
+                      ? '0 0 0 2px rgba(196, 26, 77, 0.3)'
                       : 'none',
                     transition: 'all 0.2s ease'
                   }}
