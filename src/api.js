@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://46.253.132.35.sslip.io/api/', // Укажите ваш базовый URL
+  baseURL: 'https://46.253.132.35.sslip.io/', // Укажите ваш базовый URL
   headers: {
     'Content-Type': 'multipart/form-data',
   },
