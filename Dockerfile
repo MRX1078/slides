@@ -11,6 +11,4 @@ FROM alpine AS export
 WORKDIR /static
 COPY --from=build /app/build .   
 
-VOLUME ["/static"]
-
 CMD ["sh", "-c", "echo 'frontend assets exported to /static'"]
