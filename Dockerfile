@@ -6,9 +6,3 @@ RUN yarn install --frozen-lockfile
 
 COPY . .
 RUN yarn build         
-
-FROM alpine AS export
-WORKDIR /static
-COPY --from=build /app/build .   
-
-CMD ["sh", "-c", "echo 'frontend assets exported to /static'"]
