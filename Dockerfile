@@ -9,7 +9,7 @@ RUN yarn build
 
 FROM alpine AS export
 WORKDIR /static
-COPY --from=build /app/dist .    # adjust to /app/build if CRA
+COPY --from=build /app/build .   
 
 VOLUME ["/static"]
 
