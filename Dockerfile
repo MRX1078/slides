@@ -1,12 +1,16 @@
-FROM node:lts-alpine
-
+FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package.json yarn.lock ./
-
-RUN yarn install --production
+RUN yarn install --frozen-lockfile
 
 COPY . .
+RUN yarn build         
 
-RUN yarn build
+FROM alpine AS export
+WORKDIR /static
+COPY --from=build /app/dist .    # adjust to /app/build if CRA
 
+VOLUME ["/static"]
+
+CMD ["sh", "-c", "echo 'frontend assets exported to /static'"]
